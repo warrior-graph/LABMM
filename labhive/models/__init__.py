@@ -11,3 +11,5 @@ from labhive.models.member import Member  # noqa: F401
 from labhive.models.project import Project, ProjectStatus, member_projects  # noqa: F401
 from labhive.models.research import Research, member_research  # noqa: F401
 from labhive.models.role import Role  # noqa: F401
+from labhive.models.announcement import Announcement  # noqa: F401
+from labhive.models.notification import Notification  # noqa: F401

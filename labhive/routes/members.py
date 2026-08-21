@@ -372,6 +372,9 @@ def approve_member(member_id: int):
 
     member.is_approved = True
     member.desired_lab_id = None
+    from labhive.utils.notifications import notify
+
+    notify([member.id], "member_approved", "Sua conta foi aprovada!", "/labs")
     db.session.commit()
     return jsonify(member_schema.dump(member)), 200
 

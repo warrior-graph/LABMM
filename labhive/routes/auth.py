@@ -93,6 +93,37 @@ def register():
     db.session.add(member)
     db.session.commit()
 
+    if not is_auto_approved and member.desired_lab_id:
+        # Notify managers of the desired lab that a member is waiting for approval
+        from labhive.models.lab_membership import LabMembership, MANAGER_ROLES
+        from labhive.utils.notifications import notify
+
+        manager_ids = [
+            row[0]
+            for row in db.session.query(LabMembership.member_id)
+            .filter(
+                LabMembership.lab_id == member.desired_lab_id,
+            )
+            .all()
+        ]
+        manager_ids = [
+            mid
+            for mid in manager_ids
+            if set(MANAGER_ROLES)
+            & set(
+                LabMembership.query.filter_by(
+                    member_id=mid, lab_id=member.desired_lab_id
+                ).first().roles or []
+            )
+        ]
+        notify(
+            manager_ids,
+            "member_pending",
+            f"Novo membro aguardando aprovação: {member.first_name} {member.last_name}",
+            "/admin/pending",
+        )
+        db.session.commit()
+
     if is_auto_approved:
         tokens = _make_tokens(member)
         return jsonify(member=member_schema.dump(member), **tokens), 201
