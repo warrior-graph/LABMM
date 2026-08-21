@@ -1,10 +1,10 @@
-from labmm.extensions import db
-from labmm.models.activity import Activity
-from labmm.models.lab_membership import LabMembership, LabRole
-from labmm.models.laboratory import Laboratory
-from labmm.models.member import Member
-from labmm.models.project import Project
-from labmm.models.research import Research
+from labhive.extensions import db
+from labhive.models.activity import Activity
+from labhive.models.lab_membership import LabMembership, LabRole
+from labhive.models.laboratory import Laboratory
+from labhive.models.member import Member
+from labhive.models.project import Project
+from labhive.models.research import Research
 
 
 def _add(app, obj):

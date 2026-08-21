@@ -1,4 +1,4 @@
-from labmm import create_app
+from labhive import create_app
 
 app = create_app()
 

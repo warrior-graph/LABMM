@@ -2,7 +2,7 @@
 set -e
 
 echo "Removing existing database..."
-rm -f instance/labmm.db
+rm -f instance/labhive.db
 
 echo "Running migrations..."
 flask db upgrade

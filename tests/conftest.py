@@ -1,12 +1,12 @@
 import pytest
 from flask_jwt_extended import create_access_token
 
-from labmm import create_app
-from labmm.extensions import db as _db
-from labmm.models.lab_membership import LabMembership, LabRole, ROLE_LEVEL
-from labmm.models.laboratory import Laboratory
-from labmm.models.member import Member
-from labmm.models.role import Role
+from labhive import create_app
+from labhive.extensions import db as _db
+from labhive.models.lab_membership import LabMembership, LabRole, ROLE_LEVEL
+from labhive.models.laboratory import Laboratory
+from labhive.models.member import Member
+from labhive.models.role import Role
 
 
 @pytest.fixture(scope="session")

@@ -1,4 +1,4 @@
-# How to Run LABMM
+# How to Run LabHive
 
 ## Prerequisites
 
@@ -11,7 +11,7 @@
 
 ```bash
 git clone <repo-url>
-cd LABMM
+cd labhive
 ```
 
 ### 2. Create and activate a virtual environment
@@ -39,11 +39,11 @@ FLASK_ENV=development
 SECRET_KEY=your-secret-key
 JWT_SECRET_KEY=your-jwt-secret-key
 
-# Optional: defaults to SQLite (sqlite:///labmm.db)
-DATABASE_URL=sqlite:///labmm.db
+# Optional: defaults to SQLite (sqlite:///labhive.db)
+DATABASE_URL=sqlite:///labhive.db
 
 # Optional: seed script defaults shown below
-ADMIN_EMAIL=admin@labmm.local
+ADMIN_EMAIL=admin@labhive.local
 ADMIN_PASSWORD=changeme
 ADMIN_FIRST_NAME=Admin
 ADMIN_LAST_NAME=User
@@ -84,7 +84,7 @@ pytest
 ## Project Structure
 
 ```
-labmm/          Application package (models, routes, schemas, utils)
+labhive/          Application package (models, routes, schemas, utils)
 migrations/     Alembic migration scripts
 tests/          Unit and functional tests
 run.py          Application entry point

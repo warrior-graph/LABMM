@@ -11,15 +11,15 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from labmm import create_app
-from labmm.extensions import db
-from labmm.models.member import Member
+from labhive import create_app
+from labhive.extensions import db
+from labhive.models.member import Member
 
 
 def seed():
     app = create_app()
     with app.app_context():
-        email = os.environ.get("ADMIN_EMAIL", "admin@labmm.local").strip().lower()
+        email = os.environ.get("ADMIN_EMAIL", "admin@labhive.local").strip().lower()
         password = os.environ.get("ADMIN_PASSWORD", "changeme")
         first_name = os.environ.get("ADMIN_FIRST_NAME", "Admin")
         last_name = os.environ.get("ADMIN_LAST_NAME", "User")

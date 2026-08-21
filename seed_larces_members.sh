@@ -14,7 +14,7 @@
 #
 # Defaults:
 #   BASE_URL       = http://localhost:5000
-#   ADMIN_EMAIL    = admin@labmm.local
+#   ADMIN_EMAIL    = admin@labhive.local
 #   ADMIN_PASSWORD = changeme
 #
 # Requirements: curl, jq
@@ -23,7 +23,7 @@
 set -euo pipefail
 
 BASE_URL="${1:-http://localhost:5000}"
-ADMIN_EMAIL="${2:-admin@labmm.local}"
+ADMIN_EMAIL="${2:-admin@labhive.local}"
 ADMIN_PASSWORD="${3:-changeme}"
 DEFAULT_PASSWORD="senha123"
 LAB_NAME="LARCES"

@@ -1,6 +1,6 @@
 import pytest
 
-from labmm.models.lab_membership import CompensationType, LabRole, MANAGER_ROLES
+from labhive.models.lab_membership import CompensationType, LabRole, MANAGER_ROLES
 
 
 def test_lab_role_has_eight_values():

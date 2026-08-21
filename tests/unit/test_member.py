@@ -1,8 +1,8 @@
 import pytest
 from sqlalchemy.exc import IntegrityError
 
-from labmm.extensions import db
-from labmm.models.member import Member
+from labhive.extensions import db
+from labhive.models.member import Member
 
 
 def test_set_password_hashes(app, db_tables):
