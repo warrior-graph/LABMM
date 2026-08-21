@@ -300,3 +300,104 @@ def test_manager_dashboard_summary(
     assert data["my_activities"] == []
     assert data["my_projects"] == []
     assert data["my_deadlines"] == []
+
+
+# ── Global list endpoints (dashboard/activities, /projects, /inventory) ─────
+
+
+def test_dashboard_activities_list(
+    client, db_tables, lab, super_admin, sa_headers, engineer, eng_headers
+):
+    a1 = client.post(
+        f"/labs/{lab}/activities",
+        json={"title": "A1", "status": "in_progress"},
+        headers=sa_headers,
+    ).get_json()
+    a2 = client.post(
+        f"/labs/{lab}/activities",
+        json={"title": "A2", "status": "completed"},
+        headers=sa_headers,
+    ).get_json()
+
+    # Manager sees all activities; ?status= filters
+    resp = client.get("/dashboard/activities", headers=sa_headers)
+    assert resp.status_code == 200
+    assert {a["title"] for a in resp.get_json()} == {"A1", "A2"}
+
+    resp = client.get("/dashboard/activities?status=in_progress", headers=sa_headers)
+    assert [a["title"] for a in resp.get_json()] == ["A1"]
+
+    resp = client.get("/dashboard/activities?status=bogus", headers=sa_headers)
+    assert resp.status_code == 422
+
+    # Member sees nothing until they join an activity
+    resp = client.get("/dashboard/activities", headers=eng_headers)
+    assert resp.get_json() == []
+
+    client.post(
+        f"/labs/{lab}/activities/{a1['id']}/in_charge",
+        json={"member_id": engineer},
+        headers=sa_headers,
+    )
+    resp = client.get("/dashboard/activities", headers=eng_headers)
+    assert [a["id"] for a in resp.get_json()] == [a1["id"]]
+    assert resp.get_json()[0]["lab_name"] == "Test Lab"
+
+
+def test_dashboard_projects_list(
+    client, db_tables, lab, super_admin, sa_headers, engineer, eng_headers
+):
+    p1 = client.post(
+        f"/labs/{lab}/projects",
+        json={"name": "P1", "status": "active"},
+        headers=sa_headers,
+    ).get_json()
+    client.post(
+        f"/labs/{lab}/projects",
+        json={"name": "P2", "status": "planned"},
+        headers=sa_headers,
+    ).get_json()
+
+    resp = client.get("/dashboard/projects?status=active", headers=sa_headers)
+    assert resp.status_code == 200
+    assert [p["name"] for p in resp.get_json()] == ["P1"]
+
+    resp = client.get("/dashboard/projects", headers=eng_headers)
+    assert resp.get_json() == []
+
+    client.post(
+        f"/labs/{lab}/projects/{p1['id']}/members",
+        json={"member_id": engineer},
+        headers=sa_headers,
+    )
+    resp = client.get("/dashboard/projects", headers=eng_headers)
+    assert [p["id"] for p in resp.get_json()] == [p1["id"]]
+    assert resp.get_json()[0]["lab_name"] == "Test Lab"
+
+
+def test_dashboard_inventory_list(
+    client, db_tables, lab, super_admin, sa_headers, engineer, eng_headers
+):
+    client.post(
+        f"/labs/{lab}/inventory",
+        json={"name": "RPi", "category": "HW"},
+        headers=sa_headers,
+    )
+    osc = client.post(
+        f"/labs/{lab}/inventory",
+        json={"name": "Osc", "category": "HW", "assigned_to_id": engineer},
+        headers=sa_headers,
+    ).get_json()
+
+    resp = client.get("/dashboard/inventory", headers=sa_headers)
+    assert resp.status_code == 200
+    assert len(resp.get_json()) == 2
+
+    # Member sees only items assigned to them
+    resp = client.get("/dashboard/inventory", headers=eng_headers)
+    items = resp.get_json()
+    assert len(items) == 1
+    assert items[0]["id"] == osc["id"]
+    assert items[0]["name"] == "Osc"
+    assert items[0]["assigned_to_id"] == engineer
+    assert items[0]["lab_name"] == "Test Lab"

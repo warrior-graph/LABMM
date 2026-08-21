@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from flask import Blueprint, jsonify
+from flask import Blueprint, abort, jsonify, request
 from flask_jwt_extended import get_jwt, get_jwt_identity, jwt_required
 
 from labhive.extensions import db
@@ -265,6 +265,143 @@ def dashboard_summary():
                 "my_projects": my_projects,
                 "my_deadlines": my_deadlines,
             }
+        ),
+        200,
+    )
+
+
+def _valid_status(enum_cls, raw: str | None) -> str | None:
+    """Validate an optional ?status= query param against a status enum."""
+    if not raw:
+        return None
+    values = {s.value for s in enum_cls}
+    if raw not in values:
+        abort(422, f"Invalid status. Allowed: {sorted(values)}")
+    return raw
+
+
+@bp.get("/activities")
+@jwt_required()
+def list_dashboard_activities():
+    """All activities in scope (manager: managed labs; member: own), optional ?status= filter."""
+    claims = get_jwt()
+    member_id = int(get_jwt_identity())
+    status = _valid_status(ActivityStatus, request.args.get("status"))
+
+    if _is_manager(claims, member_id):
+        lab_ids = _managed_lab_ids(claims, member_id)
+        if not lab_ids:
+            return jsonify([]), 200
+        query = Activity.query.filter(Activity.lab_id.in_(lab_ids))
+    else:
+        query = Activity.query.filter(
+            (Activity.participants.any(Member.id == member_id))
+            | (Activity.in_charge.any(Member.id == member_id))
+        )
+
+    if status:
+        query = query.filter(Activity.status == status)
+
+    acts = (
+        query.order_by(
+            Activity.deadline.asc().nullslast(), Activity.created_at.desc()
+        )
+        .all()
+    )
+    return (
+        jsonify(
+            [
+                {
+                    "id": a.id,
+                    "title": a.title,
+                    "status": a.status.value,
+                    "activity_type": a.activity_type,
+                    "deadline": a.deadline.isoformat() if a.deadline else None,
+                    "lab_id": a.lab_id,
+                    "lab_name": a.laboratory.name if a.laboratory else None,
+                    "created_at": a.created_at.isoformat() if a.created_at else None,
+                }
+                for a in acts
+            ]
+        ),
+        200,
+    )
+
+
+@bp.get("/projects")
+@jwt_required()
+def list_dashboard_projects():
+    """All projects in scope (manager: managed labs; member: own), optional ?status= filter."""
+    claims = get_jwt()
+    member_id = int(get_jwt_identity())
+    status = _valid_status(ProjectStatus, request.args.get("status"))
+
+    if _is_manager(claims, member_id):
+        lab_ids = _managed_lab_ids(claims, member_id)
+        if not lab_ids:
+            return jsonify([]), 200
+        query = Project.query.filter(Project.lab_id.in_(lab_ids))
+    else:
+        query = Project.query.filter(Project.members.any(Member.id == member_id))
+
+    if status:
+        query = query.filter(Project.status == status)
+
+    projs = query.order_by(Project.name).all()
+    return (
+        jsonify(
+            [
+                {
+                    "id": p.id,
+                    "name": p.name,
+                    "status": p.status.value,
+                    "start_date": p.start_date.isoformat() if p.start_date else None,
+                    "end_date": p.end_date.isoformat() if p.end_date else None,
+                    "lab_id": p.lab_id,
+                    "lab_name": p.laboratory.name if p.laboratory else None,
+                }
+                for p in projs
+            ]
+        ),
+        200,
+    )
+
+
+@bp.get("/inventory")
+@jwt_required()
+def list_dashboard_inventory():
+    """Inventory in scope (manager: managed labs; member: items assigned to them)."""
+    claims = get_jwt()
+    member_id = int(get_jwt_identity())
+
+    if _is_manager(claims, member_id):
+        lab_ids = _managed_lab_ids(claims, member_id)
+        if not lab_ids:
+            return jsonify([]), 200
+        query = InventoryItem.query.filter(InventoryItem.lab_id.in_(lab_ids))
+    else:
+        query = InventoryItem.query.filter(InventoryItem.assigned_to_id == member_id)
+
+    items = query.order_by(InventoryItem.name).all()
+    return (
+        jsonify(
+            [
+                {
+                    "id": it.id,
+                    "name": it.name,
+                    "category": it.category,
+                    "quantity": it.quantity,
+                    "condition": it.condition.value,
+                    "lab_id": it.lab_id,
+                    "lab_name": it.laboratory.name if it.laboratory else None,
+                    "assigned_to_id": it.assigned_to_id,
+                    "assigned_to_name": (
+                        f"{it.assigned_to.first_name} {it.assigned_to.last_name}"
+                        if it.assigned_to else None
+                    ),
+                }
+                for it in items
+            ]
         ),
         200,
     )
