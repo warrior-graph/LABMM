@@ -2,6 +2,7 @@ from flask import Flask
 
 from labhive.routes.activities import bp as activities_bp
 from labhive.routes.auth import bp as auth_bp
+from labhive.routes.calendar import bp as calendar_bp
 from labhive.routes.dashboard import bp as dashboard_bp
 from labhive.routes.inventory import bp as inventory_bp
 from labhive.routes.laboratories import bp as labs_bp
@@ -18,6 +19,7 @@ def register_blueprints(app: Flask) -> None:
     app.register_blueprint(projects_bp)
     app.register_blueprint(research_bp)
     app.register_blueprint(activities_bp)
+    app.register_blueprint(calendar_bp)
     app.register_blueprint(inventory_bp)
     app.register_blueprint(roles_bp)
     app.register_blueprint(dashboard_bp)

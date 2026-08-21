@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from flask import Blueprint, abort, jsonify, request
 from flask_jwt_extended import get_jwt, get_jwt_identity, jwt_required
@@ -288,6 +288,10 @@ def list_dashboard_activities():
     member_id = int(get_jwt_identity())
     status = _valid_status(ActivityStatus, request.args.get("status"))
 
+    window = request.args.get("window")
+    if window not in (None, "today", "week", "month"):
+        abort(422, "window must be one of: today, week, month.")
+
     if _is_manager(claims, member_id):
         lab_ids = _managed_lab_ids(claims, member_id)
         if not lab_ids:
@@ -301,6 +305,21 @@ def list_dashboard_activities():
 
     if status:
         query = query.filter(Activity.status == status)
+
+    if window:
+        today = datetime.now(timezone.utc).date()
+        if window == "today":
+            query = query.filter(Activity.deadline == today)
+        elif window == "week":
+            query = query.filter(
+                Activity.deadline >= today,
+                Activity.deadline <= today + timedelta(days=7),
+            )
+        else:  # month
+            query = query.filter(
+                Activity.deadline >= today,
+                Activity.deadline <= today + timedelta(days=30),
+            )
 
     acts = (
         query.order_by(

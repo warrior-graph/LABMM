@@ -1,9 +1,11 @@
+from datetime import datetime, timezone
+
 from flask import Blueprint, abort, jsonify, request
 from marshmallow import ValidationError
 
 from labhive.extensions import db
 from labhive.models.activity import Activity, ActivityStatus
-from labhive.models.lab_membership import LabRole
+from labhive.models.lab_membership import LabRole, MANAGER_ROLES
 from labhive.models.laboratory import Laboratory
 from labhive.models.member import Member
 from labhive.schemas.activity_schema import (
@@ -97,6 +99,26 @@ def update_activity(lab_id: int, activity_id: int):
         if len(managers) != len(set(in_charge_ids)):
             abort(422, "One or more members in charge are invalid.")
         activity.in_charge = managers
+    db.session.commit()
+    return jsonify(activity_schema.dump(activity)), 200
+
+
+@bp.post("/labs/<int:lab_id>/activities/<int:activity_id>/review")
+@require_lab_role(*MANAGER_ROLES)
+def review_activity(lab_id: int, activity_id: int):
+    """Coordinator/manager decision on an activity under review: accepted or rejected."""
+    activity = Activity.query.filter_by(id=activity_id, lab_id=lab_id).first()
+    if not activity:
+        abort(404, "Activity not found.")
+    data = request.get_json(silent=True) or {}
+    decision = data.get("decision")
+    if decision not in ("accepted", "rejected"):
+        abort(422, "decision must be 'accepted' or 'rejected'.")
+    if activity.status != ActivityStatus.under_review:
+        abort(409, "Only activities under review can be reviewed.")
+    activity.status = ActivityStatus(decision)
+    if decision == "accepted":
+        activity.completed_at = datetime.now(timezone.utc).date()
     db.session.commit()
     return jsonify(activity_schema.dump(activity)), 200
 
