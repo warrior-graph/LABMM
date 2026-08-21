@@ -18,6 +18,19 @@ from labhive.utils.decorators import require_lab_role
 bp = Blueprint("activities", __name__)
 
 
+def _resolve_members(ids, field_name: str) -> list[Member]:
+    """Resolve a list of member ids; abort with 422 if any id is unknown or duplicated."""
+    if not isinstance(ids, list):
+        abort(422, f"{field_name} must be a list of member IDs.")
+    unique = set(ids)
+    if len(ids) != len(unique):
+        abort(422, f"{field_name} contains duplicate member IDs.")
+    members = Member.query.filter(Member.id.in_(ids)).all()
+    if len(members) != len(unique):
+        abort(422, f"One or more members in {field_name} are invalid.")
+    return members
+
+
 @bp.get("/labs/<int:lab_id>/activities")
 def list_activities(lab_id: int):
     """Public endpoint — no token required.
@@ -60,16 +73,16 @@ def create_activity(lab_id: int):
         abort(404, "Laboratory not found.")
     data = request.get_json(silent=True) or {}
     in_charge_ids = data.pop("in_charge", [])
+    participant_ids = data.pop("participants", [])
     try:
         activity = activity_input_schema.load(data)
     except ValidationError as exc:
         return jsonify(errors=exc.messages), 422
     activity.lab_id = lab_id
-    if in_charge_ids and isinstance(in_charge_ids, list):
-        managers = Member.query.filter(Member.id.in_(in_charge_ids)).all()
-        if len(managers) != len(set(in_charge_ids)):
-            abort(422, "One or more members in charge are invalid.")
-        activity.in_charge = managers
+    if in_charge_ids:
+        activity.in_charge = _resolve_members(in_charge_ids, "in_charge")
+    if participant_ids:
+        activity.participants = _resolve_members(participant_ids, "participants")
     db.session.add(activity)
     db.session.commit()
     return jsonify(activity_schema.dump(activity)), 201
@@ -88,17 +101,15 @@ def update_activity(lab_id: int, activity_id: int):
         abort(404, "Activity not found.")
     data = request.get_json(silent=True) or {}
     in_charge_ids = data.pop("in_charge", None)
+    participant_ids = data.pop("participants", None)
     try:
         activity = activity_input_schema.load(data, instance=activity, partial=True)
     except ValidationError as exc:
         return jsonify(errors=exc.messages), 422
     if in_charge_ids is not None:
-        if not isinstance(in_charge_ids, list):
-            abort(422, "in_charge must be a list of member IDs.")
-        managers = Member.query.filter(Member.id.in_(in_charge_ids)).all()
-        if len(managers) != len(set(in_charge_ids)):
-            abort(422, "One or more members in charge are invalid.")
-        activity.in_charge = managers
+        activity.in_charge = _resolve_members(in_charge_ids, "in_charge")
+    if participant_ids is not None:
+        activity.participants = _resolve_members(participant_ids, "participants")
     db.session.commit()
     return jsonify(activity_schema.dump(activity)), 200
 

@@ -96,6 +96,36 @@ def test_researcher_can_update_activity_in_charge(
     assert data["in_charge"][0]["id"] == manager
 
 
+def test_create_and_update_activity_participants(
+    client, db_tables, lab, researcher, manager, engineer, res_headers
+):
+    # Create with participants
+    created = client.post(
+        f"/labs/{lab}/activities",
+        json={"title": "Com participantes", "participants": [engineer]},
+        headers=res_headers,
+    ).get_json()
+    assert created["status"] == "planned"
+    assert [p["id"] for p in created["participants"]] == [engineer]
+
+    # Update replaces participants
+    resp = client.put(
+        f"/labs/{lab}/activities/{created['id']}",
+        json={"participants": [manager]},
+        headers=res_headers,
+    )
+    assert resp.status_code == 200
+    assert [p["id"] for p in resp.get_json()["participants"]] == [manager]
+
+    # Invalid participant id
+    resp = client.put(
+        f"/labs/{lab}/activities/{created['id']}",
+        json={"participants": [999999]},
+        headers=res_headers,
+    )
+    assert resp.status_code == 422
+
+
 # ── Delete ────────────────────────────────────────────────────────────────────
 
 
