@@ -23,6 +23,9 @@ class Member(db.Model):
         db.ForeignKey("laboratories.id", ondelete="SET NULL"),
         nullable=True,
     )
+    lattes_url = db.Column(db.String(256), nullable=True)
+    orcid = db.Column(db.String(64), nullable=True)
+    github_url = db.Column(db.String(256), nullable=True)
     created_at = db.Column(
         db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
     )

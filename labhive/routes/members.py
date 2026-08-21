@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from flask import Blueprint, abort, jsonify, request
 from flask_jwt_extended import get_jwt, get_jwt_identity, jwt_required
 from marshmallow import ValidationError
@@ -100,6 +102,65 @@ def list_members(lab_id: int):
         abort(404, "Laboratory not found.")
     memberships = LabMembership.query.filter_by(lab_id=lab_id).all()
     return jsonify(lab_memberships_schema.dump(memberships)), 200
+
+
+@bp.get("/labs/<int:lab_id>/org")
+@require_lab_member
+def lab_org_chart(lab_id: int):
+    """Deterministic org-chart tree.
+
+    Returns a flat list of memberships, each annotated with resolved_reports_to_id,
+    plus the single root_id. Rules:
+      1. explicit reports_to wins only if the target is in the lab, not self, and
+         has a strictly more-senior (lower) role level — this guarantees no cycles;
+      2. otherwise attach to the most-senior member above (lowest role level);
+      3. fall back to the root.
+    Root = the lab_coordinator if present, else the most-senior member.
+    """
+    lab = db.session.get(Laboratory, lab_id)
+    if not lab:
+        abort(404, "Laboratory not found.")
+    memberships = LabMembership.query.filter_by(lab_id=lab_id).all()
+    if not memberships:
+        return jsonify({"root_id": None, "memberships": []}), 200
+
+    by_id = {m.member_id: m for m in memberships}
+
+    coordinators = [m for m in memberships if LabRole.lab_coordinator in (m.roles or [])]
+    root = coordinators[0] if coordinators else min(
+        memberships, key=_primary_role_level
+    )
+
+    resolved: dict[int, int | None] = {}
+    for m in memberships:
+        if m.member_id == root.member_id:
+            resolved[m.member_id] = None
+            continue
+
+        my_level = _primary_role_level(m)
+        # Explicit reporting, only if it points up the hierarchy
+        rid = m.reports_to_id
+        if rid and rid in by_id and rid != m.member_id:
+            if _primary_role_level(by_id[rid]) < my_level:
+                resolved[m.member_id] = rid
+                continue
+
+        # Nearest level strictly above me (level-1 if present)
+        seniors = [
+            o for o in memberships
+            if o.member_id != m.member_id and _primary_role_level(o) < my_level
+        ]
+        if seniors:
+            parent = max(seniors, key=lambda o: _primary_role_level(o))
+            resolved[m.member_id] = parent.member_id
+        else:
+            resolved[m.member_id] = root.member_id
+
+    payload = [
+        {**lab_membership_schema.dump(m), "resolved_reports_to_id": resolved[m.member_id]}
+        for m in memberships
+    ]
+    return jsonify({"root_id": root.member_id, "memberships": payload}), 200
 
 
 @bp.post("/labs/<int:lab_id>/members")
@@ -292,7 +353,7 @@ def update_own_profile(member_id: int):
         abort(404, "Member not found.")
 
     data = request.get_json(silent=True) or {}
-    allowed = ("first_name", "last_name")
+    allowed = ("first_name", "last_name", "lattes_url", "orcid", "github_url")
     for field in allowed:
         if field in data:
             setattr(member, field, data[field])
@@ -306,6 +367,56 @@ def update_own_profile(member_id: int):
 
     db.session.commit()
     return jsonify(member_schema.dump(member)), 200
+
+
+@bp.post("/labs/<int:lab_id>/members/<int:member_id>/leave")
+@require_lab_role(*MANAGER_ROLES)
+def mark_member_left(lab_id: int, member_id: int):
+    """Soft offboarding: record the leave date without deleting the membership history."""
+    membership = LabMembership.query.filter_by(lab_id=lab_id, member_id=member_id).first()
+    if not membership:
+        abort(404, "Member not found in this laboratory.")
+    membership.left_at = datetime.now(timezone.utc)
+    db.session.commit()
+    return jsonify(lab_membership_schema.dump(membership)), 200
+
+
+@bp.post("/labs/<int:lab_id>/members/<int:member_id>/rejoin")
+@require_lab_role(*MANAGER_ROLES)
+def rejoin_member(lab_id: int, member_id: int):
+    """Clear the leave date, re-activating the membership."""
+    membership = LabMembership.query.filter_by(lab_id=lab_id, member_id=member_id).first()
+    if not membership:
+        abort(404, "Member not found in this laboratory.")
+    membership.left_at = None
+    db.session.commit()
+    return jsonify(lab_membership_schema.dump(membership)), 200
+
+
+@bp.get("/members/<int:member_id>/history")
+@jwt_required()
+def member_history(member_id: int):
+    """Membership history (self or super-admin): labs, roles, joined/left dates."""
+    claims = get_jwt()
+    identity = int(get_jwt_identity())
+    if identity != member_id and not claims.get("is_super_admin"):
+        abort(403, "You can only view your own history.")
+    memberships = LabMembership.query.filter_by(member_id=member_id).all()
+    return (
+        jsonify(
+            [
+                {
+                    "lab_id": ms.lab_id,
+                    "lab_name": ms.laboratory.name if ms.laboratory else None,
+                    "roles": ms.roles or [],
+                    "joined_at": ms.joined_at.isoformat() if ms.joined_at else None,
+                    "left_at": ms.left_at.isoformat() if ms.left_at else None,
+                }
+                for ms in memberships
+            ]
+        ),
+        200,
+    )
 
 
 @bp.get("/members/lookup")

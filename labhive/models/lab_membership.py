@@ -65,6 +65,7 @@ class LabMembership(db.Model):
     reports_to_id = db.Column(
         db.Integer, db.ForeignKey("members.id", ondelete="SET NULL"), nullable=True
     )
+    left_at = db.Column(db.DateTime, nullable=True)  # set when the member leaves the lab
 
     # Relationships
     member = db.relationship(

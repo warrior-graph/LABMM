@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from flask import Blueprint, abort, jsonify, request
 from flask_jwt_extended import (
     create_access_token,
@@ -86,11 +88,37 @@ def register():
                 return jsonify(error="Selected laboratory not found."), 404
             member.desired_lab_id = lab.id
 
+    # Invite link: auto-approve and join the invited lab (overrides pending flow)
+    invite = None
+    invite_token = data.get("invite_token")
+    if invite_token:
+        from labhive.models.invite import InviteToken
+
+        invite = InviteToken.query.filter_by(token=invite_token).first()
+        if not invite or invite.used_at is not None or invite.is_expired:
+            return jsonify(error="Invalid or expired invite link."), 404
+        member.is_approved = True
+
     # Any registrant can declare professor status
     if data.get("is_professor"):
         member.is_professor = True
 
     db.session.add(member)
+    db.session.flush()  # populate member.id
+
+    if invite is not None:
+        from labhive.models.lab_membership import LabMembership, LabRole
+
+        db.session.add(
+            LabMembership(
+                member_id=member.id,
+                lab_id=invite.lab_id,
+                roles=[LabRole.research_fellow],
+            )
+        )
+        invite.used_by_id = member.id
+        invite.used_at = datetime.now(timezone.utc)
+
     db.session.commit()
 
     if not is_auto_approved and member.desired_lab_id:
